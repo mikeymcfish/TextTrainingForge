@@ -221,7 +221,7 @@ def main():
                 st.session_state.current_step = "Starting..."
                 
                 # Process directly in main thread to avoid session state issues
-                progress_container = st.container()
+                progress_placeholder = st.empty()
                 
                 try:
                     # Process snippets one by one
@@ -230,8 +230,8 @@ def main():
                             st.session_state.current_step = f"Processing snippet {i+1}/{len(snippets)}"
                             st.session_state.current_snippet = i
                             
-                            # Display enhanced progress
-                            with progress_container:
+                            # Update progress display in the same placeholder
+                            with progress_placeholder.container():
                                 display_enhanced_progress()
                             
                             result = process_snippet(
@@ -258,6 +258,9 @@ def main():
                             st.session_state.progress = (i + 1) / len(snippets)
                     
                     st.session_state.current_step = "Completed!"
+                    # Final progress update
+                    with progress_placeholder.container():
+                        display_enhanced_progress()
                     
                 except Exception as e:
                     st.error(f"Processing failed: {str(e)}")
