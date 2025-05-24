@@ -163,6 +163,15 @@ def main():
         status_text = st.empty()
         status_text.text(f"Processing snippet {st.session_state.current_snippet}/{st.session_state.total_snippets}")
         
+        # Debug information
+        if 'debug_logs' not in st.session_state:
+            st.session_state.debug_logs = []
+        
+        if st.session_state.debug_logs:
+            with st.expander("🔍 Debug Information", expanded=True):
+                for log in st.session_state.debug_logs[-10:]:  # Show last 10 logs
+                    st.text(log)
+        
         # Auto-refresh every 2 seconds while processing
         if st.session_state.processing:
             time.sleep(2)
@@ -215,8 +224,21 @@ def main():
 
 def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens, max_workers):
     """Process all snippets in parallel and update session state"""
+    import datetime
+    
+    def add_debug_log(message):
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        if 'debug_logs' not in st.session_state:
+            st.session_state.debug_logs = []
+        st.session_state.debug_logs.append(f"[{timestamp}] {message}")
+    
     try:
+        add_debug_log(f"🚀 Starting processing of {len(snippets)} snippets")
+        add_debug_log(f"⚙️ Using {max_workers} workers, API: {api_url}")
+        
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            add_debug_log("📋 Submitting all tasks to executor...")
+            
             # Submit all tasks
             future_to_index = {
                 executor.submit(
@@ -231,21 +253,29 @@ def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, mo
                 ): i for i, snippet in enumerate(snippets)
             }
             
+            add_debug_log(f"✅ All {len(future_to_index)} tasks submitted")
+            
             # Process completed tasks
             for future in as_completed(future_to_index):
+                snippet_index = future_to_index[future]
                 try:
+                    add_debug_log(f"🔄 Processing snippet {snippet_index + 1}...")
                     result = future.result()
                     st.session_state.training_data.append(result)
                     st.session_state.current_snippet += 1
                     st.session_state.progress = st.session_state.current_snippet / st.session_state.total_snippets
+                    add_debug_log(f"✅ Snippet {snippet_index + 1} completed successfully")
                 except Exception as e:
-                    st.error(f"Error processing snippet: {str(e)}")
+                    add_debug_log(f"❌ Snippet {snippet_index + 1} failed: {str(e)}")
+                    st.session_state.current_snippet += 1
+                    st.session_state.progress = st.session_state.current_snippet / st.session_state.total_snippets
         
+        add_debug_log("🎉 All snippets processed!")
         st.session_state.processing = False
         
     except Exception as e:
+        add_debug_log(f"💥 Processing failed completely: {str(e)}")
         st.session_state.processing = False
-        st.error(f"Processing failed: {str(e)}")
 
 if __name__ == "__main__":
     main()

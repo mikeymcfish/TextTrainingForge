@@ -65,14 +65,23 @@ def process_snippet(snippet: str, instruction_template: str, input_template: str
                    api_url: str, model: str, temperature: float, max_tokens: int) -> Dict[str, str]:
     """Process a single snippet to generate training data"""
     try:
+        print(f"[DEBUG] Starting snippet processing (length: {len(snippet)} chars)")
+        
         # Generate instruction
+        print(f"[DEBUG] Building instruction prompt...")
         instruction_prompt = build_instruction_prompt(snippet, instruction_template)
+        print(f"[DEBUG] Sending instruction request to API...")
         instruction = stream_llm_response(instruction_prompt, api_url, model, temperature, max_tokens)
+        print(f"[DEBUG] Got instruction response: {instruction[:50]}...")
         
         # Generate input
+        print(f"[DEBUG] Building input prompt...")
         input_prompt = build_input_prompt(snippet, input_template)
+        print(f"[DEBUG] Sending input request to API...")
         input_text = stream_llm_response(input_prompt, api_url, model, temperature, max_tokens)
+        print(f"[DEBUG] Got input response: {input_text[:50]}...")
         
+        print(f"[DEBUG] Snippet processing completed successfully")
         return {
             "instruction": instruction,
             "input": input_text,
@@ -80,6 +89,7 @@ def process_snippet(snippet: str, instruction_template: str, input_template: str
         }
     
     except Exception as e:
+        print(f"[DEBUG] Snippet processing failed: {str(e)}")
         raise Exception(f"Failed to process snippet: {str(e)}")
 
 def test_api_connection(api_url: str, model: str) -> Tuple[bool, str]:
