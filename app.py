@@ -223,26 +223,18 @@ def main():
             st.rerun()
 
 def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens, max_workers):
-    """Process all snippets in parallel and update session state"""
+    """Process all snippets sequentially to avoid threading issues"""
     import datetime
     
-    def add_debug_log(message):
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        if 'debug_logs' not in st.session_state:
-            st.session_state.debug_logs = []
-        st.session_state.debug_logs.append(f"[{timestamp}] {message}")
-    
     try:
-        add_debug_log(f"🚀 Starting processing of {len(snippets)} snippets")
-        add_debug_log(f"⚙️ Using {max_workers} workers, API: {api_url}")
+        print(f"[DEBUG] Starting processing of {len(snippets)} snippets")
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            add_debug_log("📋 Submitting all tasks to executor...")
+        # Process snippets one by one to avoid session state issues
+        for i, snippet in enumerate(snippets):
+            print(f"[DEBUG] Processing snippet {i+1}/{len(snippets)}")
             
-            # Submit all tasks
-            future_to_index = {
-                executor.submit(
-                    process_snippet,
+            try:
+                result = process_snippet(
                     snippet,
                     instruction_prompt,
                     input_prompt,
@@ -250,31 +242,29 @@ def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, mo
                     model_name,
                     temperature,
                     max_tokens
-                ): i for i, snippet in enumerate(snippets)
-            }
-            
-            add_debug_log(f"✅ All {len(future_to_index)} tasks submitted")
-            
-            # Process completed tasks
-            for future in as_completed(future_to_index):
-                snippet_index = future_to_index[future]
-                try:
-                    add_debug_log(f"🔄 Processing snippet {snippet_index + 1}...")
-                    result = future.result()
-                    st.session_state.training_data.append(result)
-                    st.session_state.current_snippet += 1
-                    st.session_state.progress = st.session_state.current_snippet / st.session_state.total_snippets
-                    add_debug_log(f"✅ Snippet {snippet_index + 1} completed successfully")
-                except Exception as e:
-                    add_debug_log(f"❌ Snippet {snippet_index + 1} failed: {str(e)}")
-                    st.session_state.current_snippet += 1
-                    st.session_state.progress = st.session_state.current_snippet / st.session_state.total_snippets
+                )
+                
+                # Update session state
+                if 'training_data' not in st.session_state:
+                    st.session_state.training_data = []
+                
+                st.session_state.training_data.append(result)
+                st.session_state.current_snippet = i + 1
+                st.session_state.progress = (i + 1) / len(snippets)
+                
+                print(f"[DEBUG] Snippet {i+1} completed successfully")
+                
+            except Exception as e:
+                print(f"[DEBUG] Snippet {i+1} failed: {str(e)}")
+                # Still increment progress even if failed
+                st.session_state.current_snippet = i + 1
+                st.session_state.progress = (i + 1) / len(snippets)
         
-        add_debug_log("🎉 All snippets processed!")
+        print(f"[DEBUG] All snippets processed! Total results: {len(st.session_state.training_data)}")
         st.session_state.processing = False
         
     except Exception as e:
-        add_debug_log(f"💥 Processing failed completely: {str(e)}")
+        print(f"[DEBUG] Processing failed completely: {str(e)}")
         st.session_state.processing = False
 
 if __name__ == "__main__":
