@@ -148,12 +148,35 @@ def main():
                 st.session_state.total_snippets = len(snippets)
                 st.session_state.current_snippet = 0
                 
-                # Start processing in a separate thread
-                threading.Thread(
-                    target=process_all_snippets,
-                    args=(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens, max_workers),
-                    daemon=True
-                ).start()
+                # Process directly in main thread to avoid session state issues
+                with st.spinner("Processing snippets..."):
+                    try:
+                        # Process snippets one by one
+                        for i, snippet in enumerate(snippets):
+                            try:
+                                result = process_snippet(
+                                    snippet,
+                                    instruction_prompt,
+                                    input_prompt,
+                                    api_url,
+                                    model_name,
+                                    temperature,
+                                    max_tokens
+                                )
+                                
+                                st.session_state.training_data.append(result)
+                                st.session_state.current_snippet = i + 1
+                                st.session_state.progress = (i + 1) / len(snippets)
+                                
+                            except Exception as e:
+                                st.error(f"Error processing snippet {i+1}: {str(e)}")
+                                st.session_state.current_snippet = i + 1
+                                st.session_state.progress = (i + 1) / len(snippets)
+                        
+                    except Exception as e:
+                        st.error(f"Processing failed: {str(e)}")
+                
+                st.session_state.processing = False
                 st.rerun()
     
     # Progress display
@@ -222,17 +245,11 @@ def main():
             st.session_state.total_snippets = 0
             st.rerun()
 
-def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens, max_workers):
-    """Process all snippets sequentially to avoid threading issues"""
-    import datetime
-    
+def process_all_snippets_sync(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens):
+    """Process all snippets synchronously in main thread"""
     try:
-        print(f"[DEBUG] Starting processing of {len(snippets)} snippets")
-        
-        # Process snippets one by one to avoid session state issues
+        # Process snippets one by one
         for i, snippet in enumerate(snippets):
-            print(f"[DEBUG] Processing snippet {i+1}/{len(snippets)}")
-            
             try:
                 result = process_snippet(
                     snippet,
@@ -252,20 +269,18 @@ def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, mo
                 st.session_state.current_snippet = i + 1
                 st.session_state.progress = (i + 1) / len(snippets)
                 
-                print(f"[DEBUG] Snippet {i+1} completed successfully")
-                
             except Exception as e:
-                print(f"[DEBUG] Snippet {i+1} failed: {str(e)}")
+                st.error(f"Error processing snippet {i+1}: {str(e)}")
                 # Still increment progress even if failed
                 st.session_state.current_snippet = i + 1
                 st.session_state.progress = (i + 1) / len(snippets)
         
-        print(f"[DEBUG] All snippets processed! Total results: {len(st.session_state.training_data)}")
-        st.session_state.processing = False
-        
     except Exception as e:
-        print(f"[DEBUG] Processing failed completely: {str(e)}")
-        st.session_state.processing = False
+        st.error(f"Processing failed: {str(e)}")
+
+def process_all_snippets(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens, max_workers):
+    """Legacy function - kept for compatibility"""
+    process_all_snippets_sync(snippets, instruction_prompt, input_prompt, api_url, model_name, temperature, max_tokens)
 
 if __name__ == "__main__":
     main()
