@@ -27,6 +27,12 @@ if 'total_snippets' not in st.session_state:
     st.session_state.total_snippets = 0
 if 'current_snippet' not in st.session_state:
     st.session_state.current_snippet = 0
+if 'start_time' not in st.session_state:
+    st.session_state.start_time = None
+if 'tokens_generated' not in st.session_state:
+    st.session_state.tokens_generated = 0
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = ""
 
 # Default prompts
 DEFAULT_INSTRUCTION_PROMPT = """Below is a short story snippet. Analyze its tone, conflict, characters, and style, then craft a clear one sentence instruction to generate a new scene in the same spirit. Keep it short and to the point.
@@ -51,6 +57,68 @@ Here is the snippet:
 ---
 
 Provide that context in a single paragraph with no additional commentary."""
+
+def display_enhanced_progress():
+    """Display enhanced progress information"""
+    st.subheader("⏳ Processing Progress")
+    
+    # Main progress bar
+    progress_value = st.session_state.progress
+    st.progress(progress_value)
+    
+    # Progress metrics in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Current Snippet", 
+            f"{st.session_state.current_snippet}/{st.session_state.total_snippets}",
+            delta=None
+        )
+    
+    with col2:
+        st.metric(
+            "Progress", 
+            f"{int(progress_value * 100)}%",
+            delta=None
+        )
+    
+    with col3:
+        st.metric(
+            "Tokens Generated", 
+            f"{st.session_state.tokens_generated:,}",
+            delta=None
+        )
+    
+    with col4:
+        # Calculate time remaining
+        if st.session_state.start_time and st.session_state.current_snippet > 0:
+            elapsed_time = time.time() - st.session_state.start_time
+            avg_time_per_snippet = elapsed_time / st.session_state.current_snippet
+            remaining_snippets = st.session_state.total_snippets - st.session_state.current_snippet
+            est_remaining_time = avg_time_per_snippet * remaining_snippets
+            
+            if est_remaining_time < 60:
+                time_display = f"{int(est_remaining_time)}s"
+            else:
+                time_display = f"{int(est_remaining_time/60)}m {int(est_remaining_time%60)}s"
+            
+            st.metric(
+                "Est. Remaining", 
+                time_display,
+                delta=None
+            )
+        else:
+            st.metric("Est. Remaining", "Calculating...", delta=None)
+    
+    # Current step indicator
+    st.info(f"🔄 {st.session_state.current_step}")
+    
+    # Detailed timing information
+    if st.session_state.start_time:
+        elapsed = time.time() - st.session_state.start_time
+        elapsed_display = f"{int(elapsed//60)}m {int(elapsed%60)}s" if elapsed >= 60 else f"{int(elapsed)}s"
+        st.caption(f"⏱️ Elapsed time: {elapsed_display}")
 
 def main():
     st.title("📚 Story Snippet to Training Data Converter")
@@ -143,62 +211,65 @@ def main():
         snippets = parse_snippets(story_text, split_token)
         if snippets:
             if st.button("▶️ Start Processing", type="primary"):
+                import time
                 st.session_state.processing = True
                 st.session_state.training_data = []
                 st.session_state.total_snippets = len(snippets)
                 st.session_state.current_snippet = 0
+                st.session_state.start_time = time.time()
+                st.session_state.tokens_generated = 0
+                st.session_state.current_step = "Starting..."
                 
                 # Process directly in main thread to avoid session state issues
-                with st.spinner("Processing snippets..."):
-                    try:
-                        # Process snippets one by one
-                        for i, snippet in enumerate(snippets):
-                            try:
-                                result = process_snippet(
-                                    snippet,
-                                    instruction_prompt,
-                                    input_prompt,
-                                    api_url,
-                                    model_name,
-                                    temperature,
-                                    max_tokens
-                                )
-                                
-                                st.session_state.training_data.append(result)
-                                st.session_state.current_snippet = i + 1
-                                st.session_state.progress = (i + 1) / len(snippets)
-                                
-                            except Exception as e:
-                                st.error(f"Error processing snippet {i+1}: {str(e)}")
-                                st.session_state.current_snippet = i + 1
-                                st.session_state.progress = (i + 1) / len(snippets)
-                        
-                    except Exception as e:
-                        st.error(f"Processing failed: {str(e)}")
+                progress_container = st.container()
+                
+                try:
+                    # Process snippets one by one
+                    for i, snippet in enumerate(snippets):
+                        try:
+                            st.session_state.current_step = f"Processing snippet {i+1}/{len(snippets)}"
+                            st.session_state.current_snippet = i
+                            
+                            # Display enhanced progress
+                            with progress_container:
+                                display_enhanced_progress()
+                            
+                            result = process_snippet(
+                                snippet,
+                                instruction_prompt,
+                                input_prompt,
+                                api_url,
+                                model_name,
+                                temperature,
+                                max_tokens
+                            )
+                            
+                            # Count tokens generated
+                            tokens_in_result = len(result['instruction'].split()) + len(result['input'].split())
+                            st.session_state.tokens_generated += tokens_in_result
+                            
+                            st.session_state.training_data.append(result)
+                            st.session_state.current_snippet = i + 1
+                            st.session_state.progress = (i + 1) / len(snippets)
+                            
+                        except Exception as e:
+                            st.error(f"Error processing snippet {i+1}: {str(e)}")
+                            st.session_state.current_snippet = i + 1
+                            st.session_state.progress = (i + 1) / len(snippets)
+                    
+                    st.session_state.current_step = "Completed!"
+                    
+                except Exception as e:
+                    st.error(f"Processing failed: {str(e)}")
                 
                 st.session_state.processing = False
                 st.rerun()
     
-    # Progress display
-    if st.session_state.processing:
+    # Progress display - this will be shown if processing but not updated by display_enhanced_progress
+    if st.session_state.processing and 'start_time' not in st.session_state:
         st.subheader("⏳ Processing Progress")
-        progress_bar = st.progress(st.session_state.progress)
-        status_text = st.empty()
-        status_text.text(f"Processing snippet {st.session_state.current_snippet}/{st.session_state.total_snippets}")
-        
-        # Debug information
-        if 'debug_logs' not in st.session_state:
-            st.session_state.debug_logs = []
-        
-        if st.session_state.debug_logs:
-            with st.expander("🔍 Debug Information", expanded=True):
-                for log in st.session_state.debug_logs[-10:]:  # Show last 10 logs
-                    st.text(log)
-        
-        # Auto-refresh every 2 seconds while processing
-        if st.session_state.processing:
-            time.sleep(2)
-            st.rerun()
+        st.progress(st.session_state.progress)
+        st.text(f"Processing snippet {st.session_state.current_snippet}/{st.session_state.total_snippets}")
     
     # Results section
     if st.session_state.training_data:
