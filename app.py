@@ -35,7 +35,7 @@ if 'current_step' not in st.session_state:
     st.session_state.current_step = ""
 
 # Default prompts
-DEFAULT_INSTRUCTION_PROMPT = """Below is a short story snippet. Analyze its tone, conflict, characters, and style, then craft a clear one sentence instruction to generate a new scene in the same spirit. Keep it short and to the point.
+DEFAULT_INSTRUCTION_PROMPT = """You are a creative assistant. When given a story snippet, you will analyze its tone, conflict, characters, and style, and then reply with exactly one sentence: a clear instruction for generating a new scene in the same spirit. Do not include any additional text. Begin your instruction with a verb like "write", "create", or "generate". Avoid using specific character names and keep the instruction general in terms of age, gender, and physical descriptions.
 
 Examples:
 1) "Write a tense exchange between two rivals in a dimly lit alley, focusing on clipped dialogue and shifting power dynamics."
@@ -47,7 +47,12 @@ Now, here is your snippet:
 {snippet}
 ---
 
-Write one paragraph that captures the mood, conflict, and stylistic direction for the AI. Keep it focused on creativity and inspiration."""
+###
+
+Here is your one sentence instruction:
+Write
+
+"""
 
 DEFAULT_INPUT_PROMPT = """Below is a short story snippet. Extract only the essential setup that a writer would need to begin crafting a similar scene: approximate ages and genders of the main characters, the setting (time of day, location, era), and the central situation or conflict. Be as brief as possible.
 
@@ -56,7 +61,9 @@ Here is the snippet:
 {snippet}
 ---
 
-Provide that context in a single paragraph with no additional commentary."""
+Provide that context in a single paragraph with no additional commentary. 
+
+Here is your one paragraph context:"""
 
 def display_enhanced_progress():
     """Display enhanced progress information"""
@@ -130,10 +137,10 @@ def main():
         
         # API Settings
         st.subheader("API Settings")
-        api_url = st.text_input("API URL", value="http://127.0.0.1:5000/v1", help="URL of your local LLM API endpoint")
+        api_url = st.text_input("API URL", value="http://0.0.0.0:5000/v1", help="URL of your local LLM API endpoint")
         model_name = st.text_input("Model Name", value="local-model", help="Name of the model to use")
-        temperature = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.8, step=0.1)
-        max_tokens = st.number_input("Max Tokens", min_value=1, max_value=1024, value=64)
+        temperature = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.55, step=0.01)
+        max_tokens = st.number_input("Max Tokens", min_value=1, max_value=1024, value=256)
         
         # Processing Settings
         st.subheader("Processing Settings")
